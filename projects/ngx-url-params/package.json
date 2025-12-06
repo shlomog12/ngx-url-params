@@ -1,6 +1,6 @@
 {
   "name": "ngx-url-params",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Advanced Angular service for managing URL query params with reactive features, debounce handling and state sync.",
   "author": "Shlomo Glick",
   "license": "MIT",

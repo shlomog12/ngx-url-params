@@ -3,4 +3,4 @@
  */
 
 export * from './lib/url-params.service';
-export * from './lib/url-params.config';
+// export * from './lib/url-params.config';

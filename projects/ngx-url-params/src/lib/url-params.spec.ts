@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router, ActivatedRoute, NavigationExtras } from '@angular/router';
 import { UrlParamsService } from './url-params.service';
+import { URL_PARAMS_DEBOUNCE_MS } from './url-params.config';
 
 // Define a simple type for the mocked navigate function, which includes the mock methods.
 // We use the basic Mock<T> structure for the function itself, avoiding complex constraints on the variable.
@@ -18,7 +19,7 @@ type RouterSpy = Router & { navigate: NavigateMockFunction };
 
 describe('UrlParamsService', () => {
   let service: UrlParamsService;
-  let routerSpy: RouterSpy; // 👈 Using the defined type
+  let routerSpy: RouterSpy; 
   let routeStub: ActivatedRoute;
   const DEBOUNCE_TIME = 10;
 
@@ -39,17 +40,10 @@ describe('UrlParamsService', () => {
     // 3. Configure the Angular testing module
     TestBed.configureTestingModule({
       providers: [
-        // 4. Provide the service using a factory.
-        {
-          provide: UrlParamsService,
-          useFactory: () => {
-            // Only pass the single, non-injected DEBOUNCE_TIME argument.
-            return new UrlParamsService(DEBOUNCE_TIME);
-          },
-        },
-        // 5. Provide the mocked dependencies
+        UrlParamsService,
+        { provide: URL_PARAMS_DEBOUNCE_MS, useValue: DEBOUNCE_TIME },
         { provide: Router, useValue: routerSpy },
-        { provide: ActivatedRoute, useValue: routeStub },
+        { provide: ActivatedRoute, useValue: routeStub }
       ],
     });
 

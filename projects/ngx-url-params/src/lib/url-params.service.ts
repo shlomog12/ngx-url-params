@@ -17,9 +17,9 @@ export class UrlParamsService {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private initialized: boolean = false;
+  private debounceMs: number = inject(URL_PARAMS_DEBOUNCE_MS);
 
-
-  constructor(@Inject(URL_PARAMS_DEBOUNCE_MS) private debounceMs: number) {}
+  constructor() {}
   /**
    * Initialization hook — must be called once at app startup.
    * Safe for SSR because all Angular tokens are already fully resolved.

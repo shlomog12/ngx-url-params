@@ -1,0 +1,5 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Keep JSON files with LF line endings to avoid cross-platform warnings
+*.json text eol=lf

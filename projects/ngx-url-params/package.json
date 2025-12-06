@@ -18,8 +18,10 @@
     "url": "https://github.com/shlomog12/ngx-url-params.git"
   },
   "peerDependencies": {
-    "@angular/common": "^21.0.0",
-    "@angular/core": "^21.0.0"
+    "@angular/core": ">=17.0.0",
+    "@angular/common": ">=17.0.0",
+    "@angular/router": ">=17.0.0",
+    "rxjs": ">=7.5.0"
   },
   "dependencies": {
     "tslib": "^2.3.0"

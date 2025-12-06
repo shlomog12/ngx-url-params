@@ -1,33 +1,67 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { Router, ActivatedRoute, NavigationExtras } from '@angular/router';
 import { UrlParamsService } from './url-params.service';
-import { Router, ActivatedRoute } from '@angular/router';
 
-describe('QueryParamsService', () => {
+// Define a simple type for the mocked navigate function, which includes the mock methods.
+// We use the basic Mock<T> structure for the function itself, avoiding complex constraints on the variable.
+type NavigateMockFunction = ((commands: readonly any[], extras?: NavigationExtras) => Promise<boolean>) & {
+    mockClear: () => void;
+    toHaveBeenCalled: (number?: number) => boolean;
+    toHaveBeenCalledTimes: (number: number) => boolean;
+    // Add other necessary spy properties if needed (e.g., mock)
+    mock: any;
+};
+
+// Define the Router spy type
+type RouterSpy = Router & { navigate: NavigateMockFunction };
+
+describe('UrlParamsService', () => {
   let service: UrlParamsService;
-  let routerSpy: Router;
+  let routerSpy: RouterSpy; // 👈 Using the defined type
   let routeStub: ActivatedRoute;
+  const DEBOUNCE_TIME = 10;
 
   beforeEach(() => {
-    // Mock router
+    // 1. Mock router, explicitly asserting the function type
     routerSpy = {
-      navigate: vi.fn()
-    } as unknown as Router;
+      // Create the spy and assert its type to include mockClear
+      navigate: vi.fn() as unknown as NavigateMockFunction,
+    } as unknown as RouterSpy;
 
-    // Mock route with snapshot
+    // 2. Mock route with snapshot
     routeStub = {
       snapshot: {
-        queryParams: { foo: 'bar', num: 5 }
+        queryParams: { foo: 'bar', num: '5' }
       }
     } as unknown as ActivatedRoute;
 
-    service = new UrlParamsService(
-      10 // small debounce for tests
-    );
+    // 3. Configure the Angular testing module
+    TestBed.configureTestingModule({
+      providers: [
+        // 4. Provide the service using a factory.
+        {
+          provide: UrlParamsService,
+          useFactory: () => {
+            // Only pass the single, non-injected DEBOUNCE_TIME argument.
+            return new UrlParamsService(DEBOUNCE_TIME);
+          },
+        },
+        // 5. Provide the mocked dependencies
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: routeStub },
+      ],
+    });
+
+    // 6. Inject the service within the TestBed context
+    service = TestBed.inject(UrlParamsService);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
+
+  // --- Tests ---
 
   it('should be created', () => {
     expect(service).toBeTruthy();
@@ -35,7 +69,7 @@ describe('QueryParamsService', () => {
 
   it('should initialize params from route snapshot', () => {
     expect(service.getParam('foo')).toBe('bar');
-    expect(service.getParam('num')).toBe(5);
+    expect(service.getParam('num')).toBe('5');
   });
 
   it('should get and set single param', () => {
@@ -99,16 +133,28 @@ describe('QueryParamsService', () => {
   });
 
   it('should sync from route snapshot', () => {
-    (routeStub.snapshot as any).queryParams = { foo: 'new', num: 10 };
+    (routeStub.snapshot as any).queryParams = { foo: 'new', num: '10' };
     service.syncFromRoute();
     expect(service.getParam('foo')).toBe('new');
-    expect(service.getParam('num')).toBe(10);
+    expect(service.getParam('num')).toBe('10');
   });
 
   it('should call router.navigate on params change (debounced)', async () => {
+    routerSpy.navigate.mockClear(); 
+
     service.setParam('debounceTest', 'value');
-    // wait for debounce
-    await new Promise(resolve => setTimeout(resolve, 20));
-    expect(routerSpy.navigate).toHaveBeenCalled();
+    
+    expect(routerSpy.navigate).not.toHaveBeenCalled(); 
+
+    // Wait longer than the DEBOUNCE_TIME
+    await new Promise(resolve => setTimeout(resolve, DEBOUNCE_TIME + 10)); 
+    
+    expect(routerSpy.navigate).toHaveBeenCalledTimes(1); 
+    expect(routerSpy.navigate).toHaveBeenCalledWith([], {
+        relativeTo: routeStub,
+        queryParams: expect.objectContaining({ debounceTest: 'value' }),
+        queryParamsHandling: 'merge',
+        replaceUrl: true
+    });
   });
 });

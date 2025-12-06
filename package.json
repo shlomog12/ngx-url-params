@@ -1,6 +1,22 @@
 {
   "name": "ngx-url-params",
   "version": "0.0.0",
+  "description": "Advanced Angular service for managing URL query params with reactive features, debounce handling and state sync.",
+  "author": "Shlomo Glick",
+  "license": "MIT",
+  "keywords": [
+    "angular",
+    "query params",
+    "url",
+    "router",
+    "ngx",
+    "params",
+    "state management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shlomog12/ngx-url-params.git"
+  },
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -33,8 +49,12 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@angular/build": "^21.0.2",
     "@angular/cli": "^21.0.2",
     "@angular/compiler-cli": "^21.0.0",
-    "typescript": "~5.9.2"
+    "jsdom": "^27.1.0",
+    "ng-packagr": "^21.0.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
   }
 }

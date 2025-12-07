@@ -1,77 +1,59 @@
-import { Inject, inject, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, debounceTime, distinctUntilChanged, map, Observable } from 'rxjs';
-// import { URL_PARAMS_DEBOUNCE_MS } from './url-params.config';
 
 /**
  * Service for managing and synchronizing URL query parameters in Angular applications.
  * Supports debounced updates, toggling, cycling, and list manipulation.
+ * SSR-compatible: gracefully handles server-side rendering without Router/ActivatedRoute.
  */
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable()
 export class UrlParamsService {
 
   /** Internal subject holding the current query params state */
   private paramsState$ = new BehaviorSubject<Record<string, any>>({});
-  private _router?: Router;
-  private _route?: ActivatedRoute;
   private debounceMs: number = 50;
   private initialized: boolean = false;
-  
+  router?: Router;
+  route?: ActivatedRoute;
 
-  constructor(    
-    private router: Router,
-    private route: ActivatedRoute
-  ) {}
+  constructor() {}
+
+  init(router: Router, route: ActivatedRoute): void {
+    this.router = router;
+    this.route = route;
+    this.ensureInitialized();
+  }
+
   /**
    * Initialization hook — must be called once at app startup.
-   * Safe for SSR because all Angular tokens are already fully resolved.
+   * Safe for SSR because it checks platform before accessing Router/ActivatedRoute.
    */
   private ensureInitialized(): void {
     if (this.initialized) return;
     this.initialized = true;
-    // Initialize the state from the current URL
-    this.syncFromRoute();
-    // Listen to changes (debounced) and update URL
-    this.listenToRoute();
-
+    
+    // Only initialize with Router/Route available
+    if (this.router && this.route) {
+      // Initialize the state from the current URL
+      this.syncFromRoute();
+      // Listen to changes (debounced) and update URL
+      this.listenToRoute();
+    }
   }
 
-  private listenToRoute() {
-        this.onParamsChange().subscribe(params => {
-      this.router.navigate([], {
-        relativeTo: this.route,
+  private listenToRoute(): void {
+    if ( !this.router || !this.route) return;
+
+    this.onParamsChange().subscribe(params => {
+      this.router!.navigate([], {
+        relativeTo: this.route!,
         queryParams: params,
         queryParamsHandling: 'merge',
         replaceUrl: true,
       });
     });
   }
-
-
-//     // Lazy getters for injected dependencies
-//   private get router(): Router {
-//     if (!this._router) {
-//       this._router = inject(Router);
-//     }
-//     return this._router;
-//   }
-
-// private get route(): ActivatedRoute {
-//   if (!this._route) {
-//     this._route = inject(ActivatedRoute);
-//   }
-//   return this._route;
-// }
-
-//   private get debounceMs(): number {
-//     return 50;
-//     // if (this._debounceMs === undefined) {
-//     //   this._debounceMs = inject(URL_PARAMS_DEBOUNCE_MS);
-//     // }
-//     // return this._debounceMs;
-//   }
 
   // ========================
   // GETTERS / CHECKS
@@ -262,8 +244,26 @@ export class UrlParamsService {
 
   /** Synchronizes params from the current route snapshot */
   public syncFromRoute(): void {
-    this.ensureInitialized();
-    const currentParams = this.route.snapshot.queryParams;
-    this.setParams(currentParams);
+
+    
+    const currentParams = this.route?.snapshot?.queryParams;
+    if (currentParams) {
+      this.setParams(currentParams);
+    }
   }
+}
+
+// ========================
+// FACTORY PROVIDER
+// ========================
+
+// ========================
+// FACTORY PROVIDER
+// ========================
+
+/**
+ * Factory function to create UrlParamsService with proper SSR support
+ */
+export function provideUrlParamsService() {
+  return UrlParamsService;
 }

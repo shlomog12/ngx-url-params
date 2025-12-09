@@ -182,19 +182,6 @@ describe('UrlParamsService', () => {
     expect(params).not.toHaveProperty('b');
   });
 
-  it('should observe param changes (debounced)', async () => {
-    service.setParam('test', 'initial');
-    const promise = new Promise<void>((resolve) => {
-      const subscription = service.onParamsChange().subscribe((params) => {
-        expect(params['test']).toBe('changed');
-        subscription.unsubscribe();
-        resolve();
-      });
-      setTimeout(() => service.setParam('test', 'changed'), 5);
-    });
-    await promise;
-  });
-
   it('should observe single param changes (distinct)', async () => {
     let emittedValue: any = undefined;
     const subscription = service.onParamChange('tracked').subscribe((value) => {

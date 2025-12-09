@@ -1,11 +1,11 @@
 import { isPlatformBrowser } from '@angular/common';
 import { Injectable, Inject, Optional, PLATFORM_ID } from '@angular/core';
 import { ActivatedRoute, Params, Router } from '@angular/router';
-import { BehaviorSubject, debounceTime, distinctUntilChanged, map, Observable } from 'rxjs';
+import { BehaviorSubject, distinctUntilChanged, map, Observable } from 'rxjs';
 
 /**
  * Service to manage URL query parameters with reactive APIs.
- * - Debounced writes to the URL
+ * - Queue-based synchronization for reliable updates
  * - Safe for SSR (no Router/ActivatedRoute usage on the server)
  * - Small, well-typed public surface for library consumers
  */
@@ -14,7 +14,11 @@ export class UrlParamsService {
 
   /** Internal subject holding the current query params state */
   private paramsState$ = new BehaviorSubject<Record<string, any>>({});
-  private debounceMs: number = 50;
+  
+  /** Queue-based update system */
+  private updateQueue: Array<() => void> = [];
+  private isProcessing: boolean = false;
+  
   private router: Router | null = null;
   private route: ActivatedRoute | null = null;
 
@@ -25,12 +29,12 @@ export class UrlParamsService {
     this.route = route;
     // Initialize the state from the current URL
     this.syncFromRoute();
-    // Listen to changes (debounced) and update URL
+    // Listen to changes and update URL
     this.listenToRoute();
   }
 
   private listenToRoute(): void {
-    if ( !this.router || !this.route) return;
+    if (!this.router || !this.route) return;
     this.onParamsChange().subscribe(params => {
       this.router!.navigate([], {
         relativeTo: this.route!,
@@ -39,6 +43,33 @@ export class UrlParamsService {
         replaceUrl: true,
       });
     });
+  }
+
+  /** Process the update queue in FIFO order */
+  private processQueue(): void {
+    if (this.isProcessing || this.updateQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+    const operation = this.updateQueue.shift();
+
+    if (operation) {
+      operation();
+    }
+
+    this.isProcessing = false;
+
+    // Continue processing if there are more items in the queue
+    if (this.updateQueue.length > 0) {
+      this.processQueue();
+    }
+  }
+
+  /** Enqueue an update operation */
+  private enqueueUpdate(operation: () => void): void {
+    this.updateQueue.push(operation);
+    this.processQueue();
   }
 
   // ========================
@@ -91,8 +122,10 @@ export class UrlParamsService {
 
   /** Sets multiple params at once */
   public setParams(params: Record<string, any>): void {
-    const updated = { ...this.paramsState$.value, ...params };
-    this.paramsState$.next(updated);
+    this.enqueueUpdate(() => {
+      const updated = { ...this.paramsState$.value, ...params };
+      this.paramsState$.next(updated);
+    });
   }
 
   /** Sets a param only if it does not already exist */
@@ -193,9 +226,9 @@ export class UrlParamsService {
   // OBSERVABLES / SYNC
   // ========================
 
-  /** Returns an observable of all params changes (debounced) */
+  /** Returns an observable of all params changes */
   public onParamsChange(): Observable<Record<string, any>> {
-    return this.paramsState$.pipe(debounceTime(this.debounceMs));
+    return this.paramsState$.asObservable();
   }
 
   /** Returns an observable for a single param's changes (distinct until changed) */

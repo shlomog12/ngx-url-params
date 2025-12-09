@@ -86,7 +86,6 @@ export class UrlParamsService {
 
   /** Sets a single param */
   public setParam(key: string, value: any): void {
-    console.log("setParam");
     this.setParams({ [key]: value });
   }
 

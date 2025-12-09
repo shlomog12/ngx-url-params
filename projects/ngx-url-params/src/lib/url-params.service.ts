@@ -15,7 +15,7 @@ export class UrlParamsService {
   /** Internal subject holding the current query params state */
   private paramsState$ = new BehaviorSubject<Record<string, any>>({});
   private debounceMs: number = 50;
- private router: Router | null = null;
+  private router: Router | null = null;
   private route: ActivatedRoute | null = null;
 
   constructor() {}

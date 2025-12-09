@@ -1,47 +1,43 @@
-import { Inject, inject, Injectable } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, debounceTime, distinctUntilChanged, map, Observable } from 'rxjs';
-// import { URL_PARAMS_DEBOUNCE_MS } from './url-params.config';
+import { isPlatformBrowser } from '@angular/common';
+import { Injectable, Inject, Optional, PLATFORM_ID } from '@angular/core';
+import { ActivatedRoute, Params, Router } from '@angular/router';
+import { BehaviorSubject, distinctUntilChanged, map, Observable } from 'rxjs';
 
 /**
- * Service for managing and synchronizing URL query parameters in Angular applications.
- * Supports debounced updates, toggling, cycling, and list manipulation.
+ * Service to manage URL query parameters with reactive APIs.
+ * - Queue-based synchronization for reliable updates
+ * - Safe for SSR (no Router/ActivatedRoute usage on the server)
+ * - Small, well-typed public surface for library consumers
  */
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable({ providedIn: 'root' })
 export class UrlParamsService {
 
   /** Internal subject holding the current query params state */
   private paramsState$ = new BehaviorSubject<Record<string, any>>({});
-  private _router?: Router;
-  private _route?: ActivatedRoute;
-  private debounceMs: number = 50;
-  private initialized: boolean = false;
   
+  /** Queue-based update system */
+  private updateQueue: Array<() => void> = [];
+  private isProcessing: boolean = false;
+  
+  private router: Router | null = null;
+  private route: ActivatedRoute | null = null;
 
-  constructor(    
-    private router: Router,
-    private route: ActivatedRoute
-  ) {}
-  /**
-   * Initialization hook — must be called once at app startup.
-   * Safe for SSR because all Angular tokens are already fully resolved.
-   */
-  private ensureInitialized(): void {
-    if (this.initialized) return;
-    this.initialized = true;
+  constructor() {}
+
+  init(router: Router, route: ActivatedRoute): void {
+    this.router = router;
+    this.route = route;
     // Initialize the state from the current URL
     this.syncFromRoute();
-    // Listen to changes (debounced) and update URL
+    // Listen to changes and update URL
     this.listenToRoute();
-
   }
 
-  private listenToRoute() {
-        this.onParamsChange().subscribe(params => {
-      this.router.navigate([], {
-        relativeTo: this.route,
+  private listenToRoute(): void {
+    if (!this.router || !this.route) return;
+    this.onParamsChange().subscribe(params => {
+      this.router!.navigate([], {
+        relativeTo: this.route!,
         queryParams: params,
         queryParamsHandling: 'merge',
         replaceUrl: true,
@@ -49,29 +45,32 @@ export class UrlParamsService {
     });
   }
 
+  /** Process the update queue in FIFO order */
+  private processQueue(): void {
+    if (this.isProcessing || this.updateQueue.length === 0) {
+      return;
+    }
 
-//     // Lazy getters for injected dependencies
-//   private get router(): Router {
-//     if (!this._router) {
-//       this._router = inject(Router);
-//     }
-//     return this._router;
-//   }
+    this.isProcessing = true;
+    const operation = this.updateQueue.shift();
 
-// private get route(): ActivatedRoute {
-//   if (!this._route) {
-//     this._route = inject(ActivatedRoute);
-//   }
-//   return this._route;
-// }
+    if (operation) {
+      operation();
+    }
 
-//   private get debounceMs(): number {
-//     return 50;
-//     // if (this._debounceMs === undefined) {
-//     //   this._debounceMs = inject(URL_PARAMS_DEBOUNCE_MS);
-//     // }
-//     // return this._debounceMs;
-//   }
+    this.isProcessing = false;
+
+    // Continue processing if there are more items in the queue
+    if (this.updateQueue.length > 0) {
+      this.processQueue();
+    }
+  }
+
+  /** Enqueue an update operation */
+  private enqueueUpdate(operation: () => void): void {
+    this.updateQueue.push(operation);
+    this.processQueue();
+  }
 
   // ========================
   // GETTERS / CHECKS
@@ -79,7 +78,6 @@ export class UrlParamsService {
 
   /** Returns the full params object with non-null values */
   public getParams(): Record<string, any> {
-    this.ensureInitialized();
     return Object.fromEntries(
       Object.entries(this.paramsState$.value).filter(([_, value]) => value !== null)
     );
@@ -87,20 +85,17 @@ export class UrlParamsService {
 
   /** Returns a specific param by key, or null if not set */
   public getParam<T = any>(key: string): T | null {
-    this.ensureInitialized();
     return this.paramsState$.value[key] ?? null;
   }
 
   /** Returns a param or a default value if null */
   public getParamOrDefault<T>(key: string, fallback: T): T {
-    this.ensureInitialized();
     const value = this.getParam<T>(key);
     return value === null ? fallback : value;
   }
 
   /** Returns a required param, throws if missing */
   public requireParam<T>(key: string): T {
-    this.ensureInitialized();
     const value = this.getParam<T>(key);
     if (value == null) throw new Error(`Missing required query param: ${key}`);
     return value;
@@ -108,13 +103,11 @@ export class UrlParamsService {
 
   /** Checks if a param exists */
   public hasParam(key: string): boolean {
-    this.ensureInitialized();
     return key in this.paramsState$.value;
   }
 
   /** Returns all non-null keys */
   public getParamKeys(): string[] {
-    this.ensureInitialized();
     return Object.keys(this.paramsState$.value).filter(k => this.paramsState$.value[k] != null);
   }
 
@@ -124,20 +117,19 @@ export class UrlParamsService {
 
   /** Sets a single param */
   public setParam(key: string, value: any): void {
-    this.ensureInitialized();
     this.setParams({ [key]: value });
   }
 
   /** Sets multiple params at once */
   public setParams(params: Record<string, any>): void {
-    this.ensureInitialized();
-    const updated = { ...this.paramsState$.value, ...params };
-    this.paramsState$.next(updated);
+    this.enqueueUpdate(() => {
+      const updated = { ...this.paramsState$.value, ...params };
+      this.paramsState$.next(updated);
+    });
   }
 
   /** Sets a param only if it does not already exist */
   public setParamIfNotExists(key: string, value: any): void {
-    this.ensureInitialized();
     if (!this.hasParam(key)) {
       this.setParam(key, value);
     }
@@ -145,13 +137,11 @@ export class UrlParamsService {
 
   /** Sets a number param */
   public setNumberParam(key: string, value: any): void {
-    this.ensureInitialized();
     this.setParam(key, Number(value));
   }
 
   /** Sets a param as nullable (empty string converts to null) */
   public setNullableParam(key: string, value: any): void {
-    this.ensureInitialized();
     this.setParam(key, value === '' ? null : value);
   }
 
@@ -161,13 +151,11 @@ export class UrlParamsService {
 
   /** Removes a param by setting it to null */
   public removeParam(key: string): void {
-    this.ensureInitialized();
     this.setParam(key, null);
   }
 
   /** Clears all params by setting them to null */
   public clearParams(): void {
-    this.ensureInitialized();
     const keys = this.getParamKeys();
     const cleared: Record<string, any> = {};
     for (const k of keys) {
@@ -178,7 +166,6 @@ export class UrlParamsService {
 
   /** Removes a param if it satisfies a predicate */
   public removeParamIf(key: string, predicate: (value: any) => boolean): void {
-    this.ensureInitialized();
     const value = this.getParam(key);
     if (predicate(value)) {
       this.removeParam(key);
@@ -187,7 +174,6 @@ export class UrlParamsService {
 
   /** Removes multiple params satisfying a predicate */
   public removeParamsIf(predicate: (key: string, value: any) => boolean): void {
-    this.ensureInitialized();
     const keys = this.getParamKeys();
     const toRemove: Record<string, any> = {};
     for (const key of keys) {
@@ -205,7 +191,6 @@ export class UrlParamsService {
 
   /** Toggle between two values for a param */
   public toggleParam(key: string, valueA: any, valueB: any): void {
-    this.ensureInitialized();
     const currentValue = this.getParam(key);
     const newValue = currentValue === valueA ? valueB : valueA;
     this.setParam(key, newValue);
@@ -213,14 +198,12 @@ export class UrlParamsService {
 
   /** Toggles a boolean param */
   public toggleBoolean(key: string): void {
-    this.ensureInitialized();
     const val = this.getParam(key);
     this.setParam(key, !val);
   }
 
   /** Cycles a param through a list of values */
   public cycleParam(key: string, values: any[]): void {
-    this.ensureInitialized();
     const current = this.getParam(key);
     const index = values.indexOf(current);
     const next = index >= 0 ? values[(index + 1) % values.length] : values[0];
@@ -229,14 +212,12 @@ export class UrlParamsService {
 
   /** Appends an item to a list-type param */
   public appendToListParam(key: string, item: any): void {
-    this.ensureInitialized();
     const list = this.getParam<any[]>(key) || [];
     this.setParam(key, [...list, item]);
   }
 
   /** Removes an item from a list-type param */
   public removeFromListParam(key: string, item: any): void {
-    this.ensureInitialized();
     const list = this.getParam<any[]>(key) || [];
     this.setParam(key, list.filter(i => i !== item));
   }
@@ -245,15 +226,13 @@ export class UrlParamsService {
   // OBSERVABLES / SYNC
   // ========================
 
-  /** Returns an observable of all params changes (debounced) */
+  /** Returns an observable of all params changes */
   public onParamsChange(): Observable<Record<string, any>> {
-    this.ensureInitialized();
-    return this.paramsState$.pipe(debounceTime(this.debounceMs));
+    return this.paramsState$.asObservable();
   }
 
   /** Returns an observable for a single param's changes (distinct until changed) */
   public onParamChange<T>(key: string): Observable<T | undefined> {
-    this.ensureInitialized();
     return this.onParamsChange().pipe(
       map(params => params[key]),
       distinctUntilChanged()
@@ -262,8 +241,9 @@ export class UrlParamsService {
 
   /** Synchronizes params from the current route snapshot */
   public syncFromRoute(): void {
-    this.ensureInitialized();
-    const currentParams = this.route.snapshot.queryParams;
-    this.setParams(currentParams);
+    const currentParams = this.route?.snapshot?.queryParams;
+    if (currentParams) {
+      this.setParams(currentParams);
+    }
   }
 }

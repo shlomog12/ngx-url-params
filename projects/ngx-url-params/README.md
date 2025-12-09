@@ -1,22 +1,10 @@
 # ngx-url-params
 
-A lightweight Angular service for managing and synchronizing URL query parameters.
-Supports **debounced updates**, **toggle/cycle values**, **list manipulation**, and **reactive observables**.
+Lightweight Angular service for managing and synchronizing URL query parameters with a concise, reactive API.
 
----
+## Overview
 
-## Features
-
-* Get, set, and remove query parameters easily
-* Set parameters only if they don't exist
-* Toggle between values or boolean states
-* Cycle through a list of predefined values
-* Append/remove items in list-type parameters
-* Observe all query parameter changes (debounced)
-* Observe changes to individual query parameters
-* Sync state from the current route snapshot
-
----
+`ngx-url-params` provides a focused service to read, update and observe URL query parameters. The service maintains an internal state (a `BehaviorSubject`) and can be synchronized with Angular's `Router` / `ActivatedRoute` by calling `init(router, route)`.
 
 ## Installation
 
@@ -24,110 +12,82 @@ Supports **debounced updates**, **toggle/cycle values**, **list manipulation**, 
 npm install ngx-url-params
 ```
 
----
+## Quick start
 
-## Usage
-
-Import the service in your Angular components or services:
+Inject `UrlParamsService` in a component or service and call `init(router, route)` where both `Router` and `ActivatedRoute` are available.
 
 ```ts
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { Router, ActivatedRoute } from '@angular/router';
 import { UrlParamsService } from 'ngx-url-params';
 
-@Component({
-  selector: 'app-demo',
-  templateUrl: './demo.component.html'
-})
-export class DemoComponent {
-  constructor(private urlParams: urlParamsService) {}
+@Component({ selector: 'app-demo', template: '' })
+export class DemoComponent implements OnInit {
+  constructor(
+    private readonly urlParams: UrlParamsService,
+    private readonly router: Router,
+    private readonly route: ActivatedRoute
+  ) {}
 
-  ngOnInit() {
-    // Get a query param
-    const foo = this.urlParams.getParam('foo');
-
-    // Set a query param
-    this.urlParams.setParam('foo', 'bar');
-
-    // Toggle a boolean param
-    this.urlParams.toggleBoolean('isVisible');
-
-    // Cycle a param through multiple values
-    this.urlParams.cycleParam('mode', ['light', 'dark', 'auto']);
-
-    // Observe changes
-    this.urlParams.onParamChange('foo').subscribe(value => {
-      console.log('foo changed:', value);
-    });
+  ngOnInit(): void {
+    this.urlParams.init(this.router, this.route);
+    this.urlParams.setParam('view', 'list');
   }
 }
 ```
 
----
+If `init` is not called the service still offers the local reactive API (get/set/observe) but will not write to the URL.
 
-## API
+## Public API (summary)
 
-### Getters
+- `init(router: Router, route: ActivatedRoute): void`
+- `getParams(): Record<string, any>`
+- `getParam<T = any>(key: string): T | null`
+- `getParamOrDefault<T>(key: string, fallback: T): T`
+- `requireParam<T>(key: string): T`
+- `hasParam(key: string): boolean`
+- `getParamKeys(): string[]`
+- `setParam(key: string, value: any): void`
+- `setParams(params: Record<string, any>): void`
+- `setParamIfNotExists(key: string, value: any): void`
+- `setNumberParam(key: string, value: any): void`
+- `setNullableParam(key: string, value: any): void`
+- `removeParam(key: string): void`
+- `clearParams(): void`
+- `removeParamIf(key: string, predicate: (value: any) => boolean): void`
+- `removeParamsIf(predicate: (key: string, value: any) => boolean): void`
+- `toggleParam(key: string, valueA: any, valueB: any): void`
+- `toggleBoolean(key: string): void`
+- `cycleParam(key: string, values: any[]): void`
+- `appendToListParam<T = any>(key: string, item: T): void`
+- `removeFromListParam<T = any>(key: string, item: T): void`
+- `onParamsChange(): Observable<Record<string, any>>`
+- `onParamChange<T>(key: string): Observable<T | undefined>`
 
-* `getParams(): Record<string, any>` – Returns all non-null params
-* `getParam<T>(key: string): T | null` – Get a single param
-* `getParamOrDefault<T>(key: string, fallback: T): T` – Get a param or fallback
-* `requireParam<T>(key: string): T` – Throws if the param is missing
-* `hasParam(key: string): boolean` – Checks if param exists
-* `getParamKeys(): string[]` – Returns all non-null keys
+## Behavior notes
 
-### Setters
+- The service keeps an internal `BehaviorSubject` and provides debounced observables of param changes.
+- When `init(router, route)` is called the service:
+  - initializes state from `ActivatedRoute.snapshot.queryParams`;
+  - subscribes to `route.queryParams` to keep internal state in sync;
+  - persists state changes to the URL using `router.navigate([], { relativeTo: route, queryParams, queryParamsHandling: 'merge', replaceUrl: true })`.
 
-* `setParam(key: string, value: any)` – Set a single param
-* `setParams(params: Record<string, any>)` – Set multiple params
-* `setParamIfNotExists(key: string, value: any)` – Set if missing
-* `setNumberParam(key: string, value: any)` – Convert value to number
-* `setNullableParam(key: string, value: any)` – Convert empty string to `null`
-
-### Removal
-
-* `removeParam(key: string)` – Remove a single param
-* `clearParams()` – Clear all params
-* `removeParamIf(key: string, predicate: (value: any) => boolean)`
-* `removeParamsIf(predicate: (key: string, value: any) => boolean)`
-
-### Toggle / Cycle / List
-
-* `toggleParam(key: string, valueA: any, valueB: any)` – Toggle between two values
-* `toggleBoolean(key: string)` – Toggle boolean
-* `cycleParam(key: string, values: any[])` – Cycle through a list
-* `appendToListParam(key: string, item: any)` – Add to list param
-* `removeFromListParam(key: string, item: any)` – Remove from list param
-
-### Observables
-
-* `onParamsChange(): Observable<Record<string, any>>` – Debounced changes
-* `onParamChange<T>(key: string): Observable<T | undefined>` – Observe a single param
-
-### Sync
-
-* `syncFromRoute(): void` – Sync state from the current route snapshot
-
----
-
-## Configuration
-
-You can configure the debounce time by providing a value for the `URL_PARAMS_DEBOUNCE_MS` injection token:
+## Examples
 
 ```ts
-import { NgModule } from '@angular/core';
-import { URL_PARAMS_DEBOUNCE_MS } from 'ngx-url-params';
+urlParams.appendToListParam('tags', 'beta');
+urlParams.removeFromListParam('tags', 'beta');
 
-@NgModule({
-  providers: [
-    { provide: URL_PARAMS_DEBOUNCE_MS, useValue: 100 }
-  ]
-})
-export class AppModule {}
+urlParams.removeParamIf('page', v => Number(v) === 1);
+
+urlParams.onParamsChange().subscribe(params => {
+  // react to param changes
+});
 ```
 
-Default debounce is **50ms**.
+## Contributing
 
----
+Contributions welcome. Open issues/PRs with tests and clear rationale.
 
 ## License
 

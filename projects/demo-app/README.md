@@ -8,6 +8,8 @@ Quick start
 
 ```bash
 npm install
+# Build the library first so the demo can import from 'ngx-url-params'
+npm run build:lib
 npm run start:demo
 ```
 
@@ -19,3 +21,4 @@ What the demo shows
 - You can set, remove, toggle and clear query params from the UI; URL is kept in sync.
 - The component subscribes to `onParamsChange()` to display current params.
 - Use the **Update URL Params** button to trigger several param updates in quick succession; the demo shows the before/after params and URL so you can verify they are merged correctly.
+- Use the `urlParamsRoute` attribute on a host element to register that component's `ActivatedRoute` automatically (the demo panel uses `urlParamsRoute`).

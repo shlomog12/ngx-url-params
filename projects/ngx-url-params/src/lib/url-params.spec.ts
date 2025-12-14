@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { firstValueFrom } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { Router, ActivatedRoute } from '@angular/router';
 import { UrlParamsService } from './url-params.service';
@@ -178,7 +179,10 @@ describe('UrlParamsService', () => {
   it('should get all params excluding null values', () => {
     service.setParams({ a: 1, b: null, c: 3 });
     const params = service.getParams();
-    expect(params).toEqual({ a: 1, c: 3 });
+    // We should include the explicitly-set non-null keys; other params
+    // (e.g. from route snapshot) may also be present since the service
+    // auto-initializes from the route when available.
+    expect(params).toMatchObject({ a: 1, c: 3 });
     expect(params).not.toHaveProperty('b');
   });
 
@@ -212,5 +216,43 @@ describe('UrlParamsService', () => {
   it('should initialize and sync with router and route', () => {
     service.init(routerSpy, routeStub);
     expect(service.getParam('foo')).toBe('bar');
+  });
+
+  it('auto-initializes from injector without explicit init()', () => {
+    // The TestBed provided Router and ActivatedRoute. The service should auto-init on construction.
+    const svc = TestBed.inject(UrlParamsService);
+    expect(svc.getParam('foo')).toBe('bar');
+  });
+
+  it('registerRoute allows components to supply a route after construction', () => {
+    const svc = TestBed.inject(UrlParamsService);
+    const route = {
+      snapshot: { queryParams: { fromRegister: 'ok' } },
+      queryParams: { subscribe: (fn: any) => fn({ fromRegister: 'ok' }) },
+    } as any as ActivatedRoute;
+
+    svc.registerRoute(route);
+    expect(svc.getParam('fromRegister')).toBe('ok');
+  });
+
+  it('emits onRouteRegistered when route is registered', async () => {
+    const svc = TestBed.inject(UrlParamsService);
+
+    const route = {
+      snapshot: { queryParams: { ok: 'y' } },
+      queryParams: { subscribe: (fn: any) => fn({ ok: 'y' }) },
+    } as any as ActivatedRoute;
+
+    const p = firstValueFrom(svc.onRouteRegistered());
+    svc.registerRoute(route);
+    const flag = await p;
+    expect(flag).toBe(true);
+  });
+
+  it('merges multiple updates applied in quick succession', () => {
+    service.setParam('a', '1');
+    service.setParam('b', '2');
+    expect(service.getParam('a')).toBe('1');
+    expect(service.getParam('b')).toBe('2');
   });
 });

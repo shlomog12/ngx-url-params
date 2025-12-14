@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { UrlParamsService } from 'ngx-url-params';
+import { UrlParamsService, URL_PARAMS_REGISTER_ROUTE_PROVIDER } from 'ngx-url-params';
 import { debounceTime, take } from 'rxjs';
 
 /**
@@ -14,43 +14,10 @@ import { debounceTime, take } from 'rxjs';
 @Component({
   selector: 'app-root',
   standalone: true,
+  providers: [URL_PARAMS_REGISTER_ROUTE_PROVIDER],
   imports: [CommonModule, FormsModule],
-  template: `
-  <h1>ngx-url-params — Demo</h1>
-  <div class="panel">
-    <div class="row">
-      <label>Key:</label>
-      <input [(ngModel)]="key" placeholder="e.g. page" />
-      <label>Value:</label>
-      <input [(ngModel)]="value" placeholder="e.g. 1" />
-      <button (click)="set()">Set</button>
-      <button (click)="remove()">Remove</button>
-    </div>
-
-    <div class="row">
-      <button (click)="toggleBool()">Toggle Boolean</button>
-      <button (click)="cycleTheme()">Cycle Theme</button>
-      <button (click)="appendToList()">Append To List</button>
-      <button (click)="updateMultiple()">Update URL Params</button>
-      <button (click)="clear()">Clear All</button>
-    </div>
-
-    <h3>Batch Update Demo</h3>
-    <div class="row">
-      <button (click)="updateMultiple()">Update URL Params (parallel)</button>
-      <div style="margin-left:12px">
-        <div><strong>Before params:</strong> <span class="kbd">{{ beforeParams | json }}</span></div>
-        <div><strong>After params:</strong> <span class="kbd">{{ afterParams | json }}</span></div>
-        <div><strong>Before URL:</strong> <span class="kbd">{{ beforeQuery }}</span></div>
-        <div><strong>After URL:</strong> <span class="kbd">{{ afterQuery }}</span></div>
-      </div>
-    </div>
-
-    <h3>Current Params</h3>
-    <pre>{{ params | json }}</pre>
-  </div>
-  `,
-  styles: [``]
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit {
   key = 'page';
@@ -60,6 +27,7 @@ export class AppComponent implements OnInit {
   afterParams: Record<string, any> | null = null;
   beforeQuery = '';
   afterQuery = '';
+  routeRegistered = false;
 
   constructor(
     private urlParams: UrlParamsService,
@@ -70,10 +38,12 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     // Initialize the service with Router + ActivatedRoute so it can synchronize state
     // to the URL. This is required in apps where you want the library to update query params.
-    this.urlParams.init(this.router, this.route);
 
     // Subscribe to changes and reflect them in the UI
     this.urlParams.onParamsChange().subscribe(params => (this.params = params));
+
+    // Show a visual indicator when a route has been registered (directive or registerRoute)
+    this.urlParams.onRouteRegistered().subscribe(registered => (this.routeRegistered = registered));
   }
 
   set() {
@@ -90,7 +60,7 @@ export class AppComponent implements OnInit {
 
   cycleTheme() {
     // cycle through 'light' | 'dark' | 'auto'
-    this.urlParams.cycleParam('theme', ['light', 'dark', 'auto']);
+    this.urlParams.cycleParam('theme_C', ['light', 'dark', 'auto']);
   }
 
   appendToList() {

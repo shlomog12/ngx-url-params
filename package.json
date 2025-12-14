@@ -20,7 +20,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "start:demo": "ng serve demo-app",
+    "start:demo": "npm run build:lib && ng serve demo-app",
+    "build:lib": "ng build ngx-url-params",
     "build": "npm run test & ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng run ngx-url-params:test"

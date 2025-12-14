@@ -360,7 +360,6 @@ export class UrlParamsService implements OnDestroy {
       );
       const merged = { ...this.paramsState$.value, ...cleaned };
       this.paramsState$.next(merged);
-      // console.debug('paramsStateAfter:', this.paramsState$.value);
     }
   }
 

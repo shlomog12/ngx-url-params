@@ -32,6 +32,30 @@
           }
         }
       }
+    },
+    "demo-app": {
+      "projectType": "application",
+      "root": "projects/demo-app",
+      "sourceRoot": "projects/demo-app/src",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:browser",
+          "options": {
+            "outputPath": "dist/demo-app",
+            "index": "projects/demo-app/src/index.html",
+            "main": "projects/demo-app/src/main.ts",
+            "tsConfig": "projects/demo-app/tsconfig.app.json",
+            "assets": [],
+            "styles": ["projects/demo-app/src/styles.css"]
+          }
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "buildTarget": "demo-app:build"
+          }
+        }
+      }
     }
   }
 }

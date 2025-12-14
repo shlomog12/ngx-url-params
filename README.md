@@ -85,6 +85,17 @@ urlParams.onParamsChange().subscribe(params => {
 });
 ```
 
+## Demo
+
+A minimal demo app is included at `projects/demo-app`. From the repository root run:
+
+```bash
+npm install
+npm run start:demo
+```
+
+Open http://localhost:4200 and try the UI to see query param synchronization in action.
+
 ## Contributing
 
 Contributions welcome. Open issues/PRs with tests and clear rationale.

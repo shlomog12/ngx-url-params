@@ -18,3 +18,4 @@ What the demo shows
 - The demo bootstraps a simple standalone `AppComponent` that calls `urlParams.init(router, route)`.
 - You can set, remove, toggle and clear query params from the UI; URL is kept in sync.
 - The component subscribes to `onParamsChange()` to display current params.
+- Use the **Update URL Params** button to trigger several param updates in quick succession; the demo shows the before/after params and URL so you can verify they are merged correctly.

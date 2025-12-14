@@ -4,7 +4,14 @@ Lightweight Angular service for managing and synchronizing URL query parameters 
 
 ## Overview
 
-`ngx-url-params` provides a focused service to read, update and observe URL query parameters. The service maintains an internal state (a `BehaviorSubject`) and can be synchronized with Angular's `Router` / `ActivatedRoute` by calling `init(router, route)`.
+`ngx-url-params` is designed for modern Angular applications that need **reliable, predictable, and composable**
+URL query parameter management.
+
+The service exposes a small, well-typed reactive API while handling the hard parts for you:
+state synchronization, browser safety (SSR), and — most importantly — **conflict‑free updates**.
+
+At its core, `ngx-url-params` uses an **internal queue-based update engine** to guarantee deterministic behavior,
+even when multiple components update query parameters at the same time.
 
 ## Installation
 
@@ -14,105 +21,78 @@ npm install ngx-url-params
 
 ## Quick start
 
-Inject `UrlParamsService` in a component or service and call `init(router, route)` where both `Router` and `ActivatedRoute` are available.
+Inject `UrlParamsService` and register a route context where `ActivatedRoute` is available.
 
 ```ts
 import { Component, OnInit } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { UrlParamsService } from 'ngx-url-params';
 
 @Component({ selector: 'app-demo', template: '' })
 export class DemoComponent implements OnInit {
   constructor(
     private readonly urlParams: UrlParamsService,
-    private readonly router: Router,
     private readonly route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    this.urlParams.init(this.router, this.route);
-    this.urlParams.setParam('view', 'list');
-  }
-}
-```
-
-If `init` is not called the service still offers the local reactive API (get/set/observe) but will not write to the URL. In modern apps the service will auto-initialize when a `Router` and `ActivatedRoute` are available.
-
-You can register a component-local route using `registerRoute(route)` or by adding the `urlParamsRoute` directive to a host element (preferred when you want a declarative API). This is useful for component-relative navigation (child routes / lazy modules).
-
-Deprecation note: `init()` is deprecated and will be removed in a future major release. Prefer `registerRoute()`, the `urlParamsRoute` directive, or the `URL_PARAMS_REGISTER_ROUTE_PROVIDER`. See the [CHANGELOG](./CHANGELOG.md) for details and migration guidance.
-
-**Migration**
-
-- **Before (using `init`)**
-
-```ts
-// Component that calls init(router, route)
-@Component({ /* ... */ })
-export class OldComponent implements OnInit {
-  constructor(private urlParams: UrlParamsService, private router: Router, private route: ActivatedRoute) {}
-  ngOnInit(): void {
-    // Deprecated approach
-    this.urlParams.init(this.router, this.route);
-    this.urlParams.setParam('view', 'list');
-  }
-}
-```
-
-- **After (preferred: directive in template)**
-
-```html
-<!-- template.html -->
-<div urlParamsRoute>
-  <!-- child components or template code can use UrlParamsService -->
-</div>
-```
-
-```ts
-@Component({ /* standalone imports include the directive if needed */ })
-export class NewComponent {
-  constructor(private urlParams: UrlParamsService) {}
-  // No explicit init needed; the directive registers the route
-}
-```
-
-- **After (alternative: provider for DI-first style)**
-
-```ts
-@Component({
-  providers: [URL_PARAMS_REGISTER_ROUTE_PROVIDER]
-})
-export class ProviderRegisteredComponent {
-  constructor(private urlParams: UrlParamsService) {
-    // Route registered during DI; no init() call required
-  }
-}
-```
-
-- **After (alternative: imperative registerRoute)**
-
-```ts
-@Component({ /* ... */ })
-export class ExplicitComponent implements OnInit {
-  constructor(private urlParams: UrlParamsService, private route: ActivatedRoute) {}
-  ngOnInit(): void {
     this.urlParams.registerRoute(this.route);
+    this.urlParams.setParam('view', 'list');
   }
 }
 ```
 
-These replacements are functionally equivalent and avoid the deprecated `init()` API.
+If no route context is registered, the service still works as a local reactive store
+(get / set / observe) without touching the URL.
 
-Example (directive):
+---
+
+## Why queue-based updates matter 🚦
+
+In real applications, URL parameters are often updated from **multiple sources**:
+
+- UI components
+- Effects or signals
+- RxJS subscriptions
+- Route guards or resolvers
+
+Without coordination, these updates can easily **race** with each other:
+
+- later updates overwrite earlier ones
+- partial state is written to the URL
+- navigation loops or flickering URLs occur
+
+### The ngx-url-params solution
+
+Every mutation (`setParam`, `setParams`, `removeParam`, `toggleParam`, etc.) is routed through an
+**internal FIFO queue**:
+
+- ✅ Updates are **serialized**, never executed concurrently
+- ✅ Each operation sees the **latest resolved state**
+- ✅ Bursts of synchronous updates are applied in a **stable, predictable order**
+- ✅ Consumers never need to debounce, lock, or manually merge params
+
+This guarantees that **what you set is exactly what ends up in the URL**, regardless of timing.
+
+> Think of it as a transaction-safe layer for query parameters.
+
+---
+
+## Route registration options (preferred over `init()`)
+
+`init()` is deprecated and will be removed in a future major release.
+
+Use one of the following alternatives:
+
+### Directive (recommended)
 
 ```html
-<!-- In your component template -->
 <div urlParamsRoute>
-  <!-- child content can use UrlParamsService and will be registered to this route -->
+  <!-- child content can safely use UrlParamsService -->
 </div>
 ```
 
-Example (provider):
+### Provider (DI-first style)
 
 ```ts
 @Component({
@@ -121,14 +101,28 @@ Example (provider):
 export class MyComponent {}
 ```
 
-The provider approach is convenient when you prefer a DI-first style or do not want to add attributes to templates.
+### Imperative registration
 
+```ts
+@Component({ /* ... */ })
+export class ExplicitComponent implements OnInit {
+  constructor(
+    private urlParams: UrlParamsService,
+    private route: ActivatedRoute
+  ) {}
+
+  ngOnInit(): void {
+    this.urlParams.registerRoute(this.route);
+  }
+}
+```
+
+---
 
 ## Public API (summary)
 
-- `init(router: Router, route: ActivatedRoute): void` (deprecated — prefer `registerRoute` / directive / provider)
-- `registerRoute(route: ActivatedRoute): void` — register a component-local route context
-- `onRouteRegistered(): Observable<boolean>` — emits when a route context has been registered
+- `registerRoute(route: ActivatedRoute): void`
+- `onRouteRegistered(): Observable<boolean>`
 - `getParams(): Record<string, any>`
 - `getParam<T = any>(key: string): T | null`
 - `getParamOrDefault<T>(key: string, fallback: T): T`
@@ -151,19 +145,18 @@ The provider approach is convenient when you prefer a DI-first style or do not w
 - `removeFromListParam<T = any>(key: string, item: T): void`
 - `onParamsChange(): Observable<Record<string, any>>`
 - `onParamChange<T>(key: string): Observable<T | undefined>`
-- `UrlParamsRouteDirective` (attribute directive to register host route)
-- `URL_PARAMS_REGISTER_ROUTE_PROVIDER` (provider for DI-first registration)
+
+---
 
 ## Behavior notes
 
-- The service keeps an internal `BehaviorSubject` as the single source of param state and exposes observables to read changes.
-- URL writes only occur when a `Router` and `ActivatedRoute` are available and the service has been initialized (via `init()`, `registerRoute()`, the `urlParamsRoute` directive, or the `URL_PARAMS_REGISTER_ROUTE_PROVIDER`). Writes are performed only in the browser (SSR-safe).
-- When initialized with a route context the service:
-  - synchronizes state from `ActivatedRoute.snapshot.queryParams` (merging into the internal state);
-  - subscribes to `route.queryParams` to keep internal state in sync with navigation (back/forward);
-  - persists internal state changes to the URL using `router.navigate([], { relativeTo: route, queryParams, queryParamsHandling: 'merge', replaceUrl: true })`.
-- To avoid unnecessary navigations, the service uses change-comparison (`distinctUntilChanged` over serialized params) before writing to the router.
+- Internal state is stored in a single `BehaviorSubject` (single source of truth)
+- **All write operations are serialized through an internal queue**
+- URL writes occur only when a route context is registered and only in the browser (SSR-safe)
+- Back/forward navigation is automatically synchronized
+- Navigation writes are optimized using change comparison to avoid unnecessary updates
 
+---
 
 ## Examples
 
@@ -178,9 +171,11 @@ urlParams.onParamsChange().subscribe(params => {
 });
 ```
 
+---
+
 ## Contributing
 
-Contributions welcome. Open issues/PRs with tests and clear rationale.
+Contributions welcome. Open issues and PRs with tests and clear rationale.
 
 ## License
 

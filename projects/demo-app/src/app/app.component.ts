@@ -14,7 +14,7 @@ import { debounceTime, take } from 'rxjs';
 @Component({
   selector: 'app-root',
   standalone: true,
-  providers: [URL_PARAMS_REGISTER_ROUTE_PROVIDER],
+  // providers: [URL_PARAMS_REGISTER_ROUTE_PROVIDER],
   imports: [CommonModule, FormsModule],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
@@ -31,19 +31,16 @@ export class AppComponent implements OnInit {
 
   constructor(
     private urlParams: UrlParamsService,
-    private router: Router,
-    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    // this.urlParams.init(this.router, this.route);
     // Initialize the service with Router + ActivatedRoute so it can synchronize state
     // to the URL. This is required in apps where you want the library to update query params.
 
     // Subscribe to changes and reflect them in the UI
     this.urlParams.onParamsChange().subscribe(params => (this.params = params));
 
-    // Show a visual indicator when a route has been registered (directive or registerRoute)
-    this.urlParams.onRouteRegistered().subscribe(registered => (this.routeRegistered = registered));
   }
 
   set() {

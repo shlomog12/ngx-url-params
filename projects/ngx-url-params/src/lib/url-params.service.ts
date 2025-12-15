@@ -1,5 +1,5 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Injectable, Inject, Injector, OnDestroy, PLATFORM_ID, inject, runInInjectionContext, EnvironmentInjector } from '@angular/core';
+import { Injectable, Injector, OnDestroy, PLATFORM_ID, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, distinctUntilChanged, map, Observable, Subscription } from 'rxjs';
 
@@ -19,15 +19,52 @@ export class UrlParamsService implements OnDestroy {
   private updateQueue: Array<() => void> = [];
   private isProcessing: boolean = false;
   
-
-
-  private router = inject(Router, { optional: true });
-  private route = inject(ActivatedRoute, { optional: true });
+  /** Lazy-loaded router and route references */
+  private _router: Router | null = null;
+  private _route: ActivatedRoute | null = null;
+  
+  private injector!: Injector;
+  private platformId!: Object;
+  
   private initialized = false;
   private routeQuerySub: Subscription | null = null;
   private paramsChangeSub: Subscription | null = null;
   private routeRegistered$ = new BehaviorSubject<boolean>(false);
 
+  constructor() {
+    this.injector = inject(Injector);
+    this.platformId = inject(PLATFORM_ID);
+  }
+
+  /**
+   * Lazy getter for Router - only resolves when accessed
+   * Safe for SSR - returns null if Router not available
+   */
+  private get router(): Router | null {
+    if (this._router === null && isPlatformBrowser(this.platformId)) {
+      try {
+        this._router = this.injector.get(Router, null);
+      } catch {
+        this._router = null;
+      }
+    }
+    return this._router;
+  }
+
+  /**
+   * Lazy getter for ActivatedRoute - only resolves when accessed
+   * Safe for SSR - returns null if ActivatedRoute not available
+   */
+  private get route(): ActivatedRoute | null {
+    if (this._route === null && isPlatformBrowser(this.platformId)) {
+      try {
+        this._route = this.injector.get(ActivatedRoute, null);
+      } catch {
+        this._route = null;
+      }
+    }
+    return this._route;
+  }
 
   /**
    * Initialize the service.
@@ -42,12 +79,13 @@ export class UrlParamsService implements OnDestroy {
    * @since 1.0.0
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for backward compatibility
-  init(router?: Router | null, route?: ActivatedRoute | null): void {
+  public init(router?: Router | null, route?: ActivatedRoute | null): void {
     if (this.initialized) return;
 
-    // Accept explicit router/route (backwards compatible), otherwise resolve lazily
-    this.router = router ?? null;
-    this.route = route ?? null;
+    // Accept explicit router/route (backwards compatible)
+    if (router) this._router = router;
+    if (route) this._route = route;
+    
     this.ensureInitialized();
   }
 
@@ -58,13 +96,18 @@ export class UrlParamsService implements OnDestroy {
    */
   private ensureInitialized(): void {
     if (this.initialized) return;
+    if (!isPlatformBrowser(this.platformId)) return;
 
     // Initialize state from current route snapshot (no navigation triggered)
     this.syncFromRoute();
 
-    if (!this.router || !this.route) return;
+    const router = this.router;
+    const route = this.route;
+    
+    if (!router || !route) return;
+
     // Subscribe to route changes so the service follows external navigation (back/forward)
-    this.routeQuerySub = this.route.queryParams.subscribe(params => {
+    this.routeQuerySub = route.queryParams.subscribe(params => {
       const cleaned = params || {};
       const merged = { ...this.paramsState$.value, ...cleaned };
       if (JSON.stringify(merged) !== JSON.stringify(this.paramsState$.value)) {
@@ -79,15 +122,17 @@ export class UrlParamsService implements OnDestroy {
     // Subscribe to internal param changes and write them to the URL
     this.paramsChangeSub = this.onParamsChangeWithNull()
       .pipe(distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)))
-        .subscribe(params => {
-          if (!this.router || !this.route) return;
-          this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams: params,
-            queryParamsHandling: 'merge',
-            replaceUrl: true,
-          });
+      .subscribe(params => {
+        const router = this.router;
+        const route = this.route;
+        if (!router || !route) return;
+        router.navigate([], {
+          relativeTo: route,
+          queryParams: params,
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
         });
+      });
 
     this.initialized = true;
   }
@@ -99,15 +144,11 @@ export class UrlParamsService implements OnDestroy {
    * needing to provide a `Router` instance.
    */
   public registerRoute(route: ActivatedRoute): void {
-    this.route = route;
+    this._route = route;
+    
     // Merge the current route snapshot into internal state immediately
     // (safe on server and browser) so components see the params right away.
     this.syncFromRoute();
-
-    // Ensure the router is resolved (lazy) and initialize subscriptions
-    // if (!this.router) {
-    //   this.router = 
-    // }
 
     // Only set up full routing subscriptions if possible (router + route available)
     if (this.router && this.route) {
@@ -314,7 +355,7 @@ export class UrlParamsService implements OnDestroy {
     return this.paramsState$.asObservable();
   }
 
-    /** Returns an observable of all params changes */
+  /** Returns an observable of all params changes */
   public onParamsChange(): Observable<Record<string, any>> {
     return this.onParamsChangeWithNull().pipe(
       map(params => {
@@ -335,7 +376,8 @@ export class UrlParamsService implements OnDestroy {
 
   /** Synchronizes params from the current route snapshot */
   public syncFromRoute(): void {
-    const currentParams = this.route?.snapshot?.queryParams;
+    const currentRoute = this.route;
+    const currentParams = currentRoute?.snapshot?.queryParams;
     if (currentParams) {
       // Update internal state directly (no navigation) and normalize empty strings to null
       const cleaned = Object.fromEntries(
@@ -346,7 +388,7 @@ export class UrlParamsService implements OnDestroy {
     }
   }
 
-    /**
+  /**
    * Clean up any active subscriptions when the service is destroyed.
    */
   public ngOnDestroy(): void {
@@ -354,5 +396,4 @@ export class UrlParamsService implements OnDestroy {
     this.paramsChangeSub?.unsubscribe();
     this.routeRegistered$.complete();
   }
-
 }

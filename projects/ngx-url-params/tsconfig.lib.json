@@ -4,6 +4,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "../../out-tsc/lib",
+    // "useDefineForClassFields": false,
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,
